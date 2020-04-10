@@ -39,7 +39,6 @@ var rootCmd = &cobra.Command{
 			LogLevel:          viper.GetUint64("log-level"),
 			LogFile:           viper.GetString("log-file"),
 			VerusConfPath:     viper.GetString("verus-conf-path"),
-			ZcashConfPath:     viper.GetString("zcash-conf-path"),
 			NoTLSVeryInsecure: viper.GetBool("no-tls-very-insecure"),
 			CacheSize:         viper.GetInt("cache-size"),
 		}
@@ -217,7 +216,6 @@ func init() {
 	rootCmd.Flags().Int("log-level", int(logrus.InfoLevel), "log level (logrus 1-7)")
 	rootCmd.Flags().String("log-file", "./server.log", "log file to write to")
 	rootCmd.Flags().String("verus-conf-path", "./VRSC.conf", "conf file to pull VerusCoin RPC creds from")
-	rootCmd.Flags().String("zcash-conf-path", "./zcash.conf", "conf file to pull RPC creds from")
 	rootCmd.Flags().Bool("no-tls-very-insecure", false, "run without the required TLS certificate, only for debugging, DO NOT use in production")
 	rootCmd.Flags().Int("cache-size", 80000, "number of blocks to hold in the cache")
 
@@ -233,8 +231,6 @@ func init() {
 	viper.SetDefault("log-file", "./server.log")
 	viper.BindPFlag("verus-conf-path", rootCmd.Flags().Lookup("verus-conf-path"))
 	viper.SetDefault("verus-conf-path", "./VRSC.conf")
-	viper.BindPFlag("zcash-conf-path", rootCmd.Flags().Lookup("zcash-conf-path"))
-	viper.SetDefault("zcash-conf-path", "./zcash.conf")
 	viper.BindPFlag("no-tls-very-insecure", rootCmd.Flags().Lookup("no-tls-very-insecure"))
 	viper.SetDefault("no-tls-very-insecure", false)
 	viper.BindPFlag("cache-size", rootCmd.Flags().Lookup("cache-size"))

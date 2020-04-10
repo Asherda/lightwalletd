@@ -4,4 +4,4 @@ log-file: /dev/stdout
 log-level: 10
 tls-cert: /secrets/lightwallted/cert.pem
 tls-key: /secrets/lightwallted/cert.key
-zcash-conf-path: /srv/zcashd/zcash.conf
+verusd-conf-path: /srv/.komodo/VRSC/VRSC.conf
