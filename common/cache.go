@@ -186,16 +186,6 @@ func NewBlockCache(db *leveldb.DB, chainID string, startHeight int, redownload b
 		c.flushBlocks(c.firstBlock, c.nextBlock)
 	}
 
-	for i := c.firstBlock; i < c.nextBlock; i++ {
-
-		// Check for corruption.
-		block := c.readBlock(i)
-		if block == nil {
-			Log.Warning("error, record not found reading block at height ", i, ", attempting to recover")
-			c.recoverFromCorruption(c.nextBlock)
-			break
-		}
-	}
 	Log.Info("Found ", c.nextBlock-c.firstBlock, " blocks in cache")
 	return c
 }
