@@ -14,9 +14,7 @@
  #
  # ************************************************************************/
 PROJECT_NAME := "lightwalletd"
-GO_FILES := $(shell find . -name '*.go' | grep -v /vendor/ | grep -v '*_test.go')
 GO_TEST_FILES := $(shell find . -name '*_test.go' -type f | rev | cut -d "/" -f2- | rev | sort -u)
-GO_BUILD_FILES := $(shell find . -name 'main.go')
 
 VERSION := `git describe --tags`
 GITCOMMIT := `git rev-parse HEAD`
@@ -59,7 +57,7 @@ test:
 
 # Run data race detector
 race:
-	GO111MODULE=on CGO_ENABLED=1 go test -v -race -short ./...
+	go test -v -race -short ./...
 
 # Run memory sanitizer (need to ensure proper build flag is set)
 msan:
@@ -137,10 +135,10 @@ dep:
 
 # Build binary
 build:
-	GO111MODULE=on go build $(LDFLAGS) 
+	go build $(LDFLAGS)
 
 build_rel:
-	GO111MODULE=on GOOS=linux go build $(LDFLAGS) 
+	GOOS=linux go build $(LDFLAGS)
 
 # Install binaries into Go path
 install:
@@ -154,7 +152,7 @@ update-grpc:
 	cd walletrpc && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative service.proto
 	cd walletrpc && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative darkside.proto
 	cd walletrpc && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative compact_formats.proto
-	go mod tidy && go mod vendor
+	go mod tidy
 
 clean:
 	@echo "clean project..."
