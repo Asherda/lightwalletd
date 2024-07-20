@@ -47,7 +47,7 @@ func NewDarksideStreamer(cache *common.BlockCache) (walletrpc.DarksideStreamerSe
 
 // Test to make sure Address is a single t address
 func checkTaddress(taddr string) error {
-	match, err := regexp.Match("\\At[a-zA-Z0-9]{34}\\z", []byte(taddr))
+	match, err := regexp.Match("\\AR[a-zA-Z0-9]{33}\\z", []byte(taddr))
 	if err != nil || !match {
 		return errors.New("Invalid address")
 	}
