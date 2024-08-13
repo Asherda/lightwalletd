@@ -264,33 +264,21 @@ func (s *lwdStreamer) GetTransaction(ctx context.Context, txf *walletrpc.TxFilte
 		if len(txf.Hash) != 32 {
 			return nil, errors.New("Transaction ID has invalid length")
 		}
-		leHashStringJSON, err := json.Marshal(hex.EncodeToString(parser.Reverse(txf.Hash)))
+		txidJSON, err := json.Marshal(hex.EncodeToString(parser.Reverse(txf.Hash)))
 		if err != nil {
 			return nil, err
 		}
-		params := []json.RawMessage{
-			leHashStringJSON,
-			json.RawMessage("1"),
-		}
-		result, rpcErr := common.RawRequest("getrawtransaction", params)
 
-		// For some reason, the error responses are not JSON
+		params := []json.RawMessage{txidJSON, json.RawMessage("1")}
+		result, rpcErr := common.RawRequest("getrawtransaction", params)
 		if rpcErr != nil {
+			// For some reason, the error responses are not JSON
 			return nil, rpcErr
 		}
-		// Many other fields are returned, but we need only these two.
-		var txinfo common.ZcashdRpcReplyGetrawtransaction
-		err = json.Unmarshal(result, &txinfo)
+
+		r, err := common.ParseRawTransaction(result)
 		if err != nil {
 			return nil, err
-		}
-		txBytes, err := hex.DecodeString(txinfo.Hex)
-		if err != nil {
-			return nil, err
-		}
-		r := &walletrpc.RawTransaction{
-			Data:   txBytes,
-			Height: uint64(txinfo.Height),
 		}
 		common.Log.Tracef("  return: %+v\n", r)
 		return r, nil
