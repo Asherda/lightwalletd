@@ -47,10 +47,10 @@ include(ExternalProject)
 set(LIBSODIUM_VERSION "1.0.18")
 
 if(WIN32)
-    set(LIBSODIUM_SOURCE_URL "https://download.libsodium.org/libsodium/releases/libsodium-${LIBSODIUM_VERSION}-stable-msvc.zip")
+    set(LIBSODIUM_SOURCE_URL "https://download.libsodium.org/libsodium/releases/old/libsodium-${LIBSODIUM_VERSION}-stable-msvc.zip")
     set(LIBSODIUM_HASH "c1d48d85c9361e350931ffe5067559cd7405a697c655d26955fb568d1084a5f4")
 else()
-    set(LIBSODIUM_SOURCE_URL "https://download.libsodium.org/libsodium/releases/libsodium-${LIBSODIUM_VERSION}.tar.gz")
+    set(LIBSODIUM_SOURCE_URL "https://download.libsodium.org/libsodium/releases/old/libsodium-${LIBSODIUM_VERSION}.tar.gz")
     set(LIBSODIUM_HASH "6f504490b342a4f8a4c4a02fc9b866cbef8622d5df4e5452b46be121e46636c1")
 endif()
 
