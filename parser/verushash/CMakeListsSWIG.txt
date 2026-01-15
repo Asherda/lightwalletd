@@ -11,7 +11,7 @@ endif()
 include(UseSWIG)
 
 set(SWIG_MODULE_NAME "verushash")
-set(CMAKE_SWIG_FLAGS -c++ -go -intgosize 64)
+set(CMAKE_SWIG_FLAGS -c++ -intgosize 64)
 set_source_files_properties(verushash.i PROPERTIES CPLUSPLUS ON)
 
 # Generate the Go bindings inside the verushash directory
