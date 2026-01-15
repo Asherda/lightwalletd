@@ -72,13 +72,14 @@ ExternalProject_Add(
 
 # Fetch and build Boost
 set(BOOST_VERSION "1_72_0")
-set(BOOST_SOURCE_URL "https://boostorg.jfrog.io/artifactory/main/release/1.72.0/source/boost_1_72_0.tar.bz2")
-set(BOOST_HASH "59c9b274bc451cf91a9ba1dd2c7fdcaf5d60b1b3aa83f2c9fa143417cc660722")  # SHA-256 hash
+string(REPLACE "_" "." BOOST_VERSION_DOTTED "${BOOST_VERSION}")
+set(BOOST_SOURCE_URL "https://archives.boost.io/release/${BOOST_VERSION_DOTTED}/source/boost_${BOOST_VERSION}.tar.bz2")
+set(BOOST_SHA256SUM "59c9b274bc451cf91a9ba1dd2c7fdcaf5d60b1b3aa83f2c9fa143417cc660722")
 
 ExternalProject_Add(
     boost
     URL ${BOOST_SOURCE_URL}
-    URL_HASH SHA256=${BOOST_HASH}
+    URL_HASH SHA256=${BOOST_SHA256SUM}
     PREFIX ${CMAKE_BINARY_DIR}/staging/boost
 
     CONFIGURE_COMMAND ""
