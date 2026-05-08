@@ -5,6 +5,7 @@
 package common
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"strconv"
@@ -389,7 +390,12 @@ func GetBlock(cache *BlockCache, height int) (*walletrpc.CompactBlock, error) {
 }
 
 // GetBlockRange returns a sequence of consecutive blocks in the given range.
-func GetBlockRange(cache *BlockCache, blockOut chan<- *walletrpc.CompactBlock, errOut chan<- error, start, end int) {
+//
+// The `ctx` parameter is used to abort iteration when the gRPC client cancels
+// the stream. Without it, the producer goroutine would block indefinitely on
+// the unbuffered `blockOut` send after the consumer (the gRPC handler) returns,
+// leaking one goroutine per cancelled stream.
+func GetBlockRange(ctx context.Context, cache *BlockCache, blockOut chan<- *walletrpc.CompactBlock, errOut chan<- error, start, end int) {
 	// Go over [start, end] inclusive
 	low := start
 	high := end
@@ -405,12 +411,22 @@ func GetBlockRange(cache *BlockCache, blockOut chan<- *walletrpc.CompactBlock, e
 		}
 		block, err := GetBlock(cache, j)
 		if err != nil {
-			errOut <- err
+			select {
+			case errOut <- err:
+			case <-ctx.Done():
+			}
 			return
 		}
-		blockOut <- block
+		select {
+		case blockOut <- block:
+		case <-ctx.Done():
+			return
+		}
 	}
-	errOut <- nil
+	select {
+	case errOut <- nil:
+	case <-ctx.Done():
+	}
 }
 
 // ParseRawTransaction converts between the JSON result of a `zcashd`
