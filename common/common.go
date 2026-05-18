@@ -63,6 +63,7 @@ var RawRequest func(method string, params []json.RawMessage) (json.RawMessage, e
 var Time struct {
 	Sleep func(d time.Duration)
 	Now   func() time.Time
+	After func(d time.Duration) <-chan time.Time
 }
 
 // Log as a global variable simplifies logging

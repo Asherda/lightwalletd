@@ -384,6 +384,7 @@ func init() {
 	// Indirect functions for test mocking (so unit tests can talk to stub functions)
 	common.Time.Sleep = time.Sleep
 	common.Time.Now = time.Now
+	common.Time.After = time.After
 }
 
 // initConfig reads in config file and ENV variables if set.

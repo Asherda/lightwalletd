@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"time"
@@ -34,7 +35,7 @@ var (
 	g_lock sync.Mutex
 )
 
-func GetMempool(sendToClient func(*walletrpc.RawTransaction) error) error {
+func GetMempool(ctx context.Context, sendToClient func(*walletrpc.RawTransaction) error) error {
 	g_lock.Lock()
 	index := 0
 	// Stay in this function until the tip block hash changes.
@@ -42,6 +43,14 @@ func GetMempool(sendToClient func(*walletrpc.RawTransaction) error) error {
 
 	// Wait for more transactions to be added to the list
 	for {
+		// Observe client cancel at the top of every iteration. This is
+		// load-bearing on the empty-mempool path where sendToClient is never
+		// invoked and the loop would otherwise spin until the next tip change
+		// (~75s avg on mainnet).
+		if err := ctx.Err(); err != nil {
+			g_lock.Unlock()
+			return err
+		}
 		// Don't fetch the mempool more often than every 2 seconds.
 		now := Time.Now()
 		if now.After(g_lastTime.Add(2 * time.Second)) {
@@ -76,7 +85,14 @@ func GetMempool(sendToClient func(*walletrpc.RawTransaction) error) error {
 				return err
 			}
 		}
-		Time.Sleep(200 * time.Millisecond)
+		// Cancel-aware sleep: replaces the prior non-cancellable Time.Sleep so
+		// a client disconnect aborts within 200ms even when sendToClient is
+		// never invoked.
+		select {
+		case <-Time.After(200 * time.Millisecond):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 		g_lock.Lock()
 		if g_lastBlockChainInfo.BestBlockHash != stayHash {
 			break

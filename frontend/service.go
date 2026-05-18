@@ -212,6 +212,15 @@ func (s *lwdStreamer) GetTreeState(ctx context.Context, id *walletrpc.BlockID) (
 	}
 	var gettreestateReply common.ZcashdRpcReplyGettreestate
 	for {
+		// Hygiene companion to PR #560: observe client cancel between
+		// RawRequest calls. In practice this loop terminates in one iteration
+		// on the active chain because zcashd's z_gettreestate hard-stops the
+		// SkipHash walk at the Sapling activation height (zcashd
+		// src/rpc/blockchain.cpp:1411). This check is for symmetry with the
+		// other streaming-RPC ctx-checks, not for DoS defense.
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		result, rpcErr := common.RawRequest("z_gettreestate", params)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -417,7 +426,7 @@ func (s *lwdStreamer) GetTaddressBalanceStream(addresses walletrpc.CompactTxStre
 
 func (s *lwdStreamer) GetMempoolStream(_empty *walletrpc.Empty, resp walletrpc.CompactTxStreamer_GetMempoolStreamServer) error {
 	common.Log.Debugf("gRPC GetMempoolStream()\n")
-	err := common.GetMempool(func(tx *walletrpc.RawTransaction) error {
+	err := common.GetMempool(resp.Context(), func(tx *walletrpc.RawTransaction) error {
 		return resp.Send(tx)
 	})
 	return err

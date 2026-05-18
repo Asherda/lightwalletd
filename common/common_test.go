@@ -88,6 +88,17 @@ func nowStub() time.Time {
 	return start.Add(sleepDuration)
 }
 
+// afterStub returns a pre-fired channel so the select case in GetMempool's
+// cancel-aware sleep fires immediately, accumulating sleepDuration like
+// sleepStub does. Used by tests that exercise GetMempool's wait loop.
+func afterStub(d time.Duration) <-chan time.Time {
+	sleepCount++
+	sleepDuration += d
+	ch := make(chan time.Time, 1)
+	ch <- time.Time{}
+	return ch
+}
+
 // ------------------------------------------ GetLightdInfo()
 
 func getLightdInfoStub(method string, params []json.RawMessage) (json.RawMessage, error) {
@@ -720,12 +731,13 @@ func TestMempoolStream(t *testing.T) {
 	RawRequest = mempoolStub
 	Time.Sleep = sleepStub
 	Time.Now = nowStub
+	Time.After = afterStub
 	// In real life, wall time is not close to zero, simulate that.
 	sleepDuration = 1000 * time.Second
 
 	var replies []*walletrpc.RawTransaction
 	// The first request after startup immediately returns an empty list.
-	err := GetMempool(func(tx *walletrpc.RawTransaction) error {
+	err := GetMempool(context.Background(), func(tx *walletrpc.RawTransaction) error {
 		t.Fatal("send to client function called on initial GetMempool call")
 		return nil
 	})
@@ -734,7 +746,7 @@ func TestMempoolStream(t *testing.T) {
 	}
 
 	// This should return two transactions.
-	err = GetMempool(func(tx *walletrpc.RawTransaction) error {
+	err = GetMempool(context.Background(), func(tx *walletrpc.RawTransaction) error {
 		replies = append(replies, tx)
 		return nil
 	})
@@ -800,4 +812,73 @@ func TestParseRawTransaction(t *testing.T) {
 	if rt2.Height != 0 {
 		t.Errorf("Unmarshalled incorrect height: got: %d, expected: 0.", rt2.Height)
 	}
+}
+
+// TestMempoolStreamCancelOnEmptyMempool is the regression test for the fix in
+// this PR. Without the fix, GetMempool on an empty mempool with stable tip
+// hash never observes ctx.Done because sendToClient is never invoked and the
+// 200ms Time.Sleep is non-cancellable. With the fix, the cancel-aware select
+// at the bottom of the loop returns promptly with ctx.Err().
+func TestMempoolStreamCancelOnEmptyMempool(t *testing.T) {
+	// Stub RawRequest to return a stable empty-mempool / stable-tip world,
+	// so the loop parks at the cancel-aware sleep with no work and no tip
+	// change to break out.
+	RawRequest = func(method string, params []json.RawMessage) (json.RawMessage, error) {
+		switch method {
+		case "getblockchaininfo":
+			r, _ := json.Marshal(&ZcashdRpcReplyGetblockchaininfo{
+				BestBlockHash: "stable-hash",
+				Blocks:        100,
+			})
+			return r, nil
+		case "getrawmempool":
+			return json.RawMessage("[]"), nil
+		}
+		return nil, errors.New("unexpected RPC: " + method)
+	}
+	// Real time for the cancel-aware sleep so ctx.Done has a real race with
+	// the 200ms timer. afterStub would fire instantly and the test would not
+	// exercise the cancel path deterministically.
+	Time.After = time.After
+	Time.Sleep = sleepStub
+	Time.Now = time.Now
+
+	// Pre-populate the package-global tip cache so the first refresh matches
+	// the stubbed tip and does NOT trigger the tip-changed branch (which
+	// would break out of the loop immediately).
+	g_lastBlockChainInfo = &ZcashdRpcReplyGetblockchaininfo{BestBlockHash: "stable-hash"}
+	g_lastTime = time.Time{}
+	g_txidSeen = map[txid]struct{}{}
+	g_txList = []*walletrpc.RawTransaction{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		done <- GetMempool(ctx, func(tx *walletrpc.RawTransaction) error {
+			t.Error("sendToClient must not be invoked on empty mempool")
+			return nil
+		})
+	}()
+
+	// Let the loop reach the cancel-aware select.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != context.Canceled {
+			t.Fatalf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("GetMempool did not return within 2s of cancel; the cancel-aware select is not effective")
+	}
+
+	// Reset shared state for any subsequent tests.
+	g_lastBlockChainInfo = &ZcashdRpcReplyGetblockchaininfo{}
+	g_lastTime = time.Time{}
+	g_txidSeen = map[txid]struct{}{}
+	g_txList = []*walletrpc.RawTransaction{}
+	sleepCount = 0
+	sleepDuration = 0
 }
