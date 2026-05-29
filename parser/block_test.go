@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -290,4 +291,23 @@ func TestCompactBlocks(t *testing.T) {
 		}
 	}
 
+}
+
+func TestParseBlockRejectsTransactionCountThatCannotFit(t *testing.T) {
+	// 141-byte block header with version=4, zero-valued header fields, and an
+	// empty CompactSize-prefixed Equihash solution, followed by tx_count=1 and
+	// no transaction bytes.
+	blockData := make([]byte, 141)
+	blockData[0] = 0x04
+	blockData = append(blockData, 0x01)
+
+	block := NewBlock()
+	_, err := block.ParseFromSlice(blockData)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	wantErr := "tx_count 1 exceeds remaining input length 0"
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("error mismatch:\nhave: %v\nwant substring: %s", err, wantErr)
+	}
 }

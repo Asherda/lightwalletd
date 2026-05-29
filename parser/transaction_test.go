@@ -881,3 +881,96 @@ func subTestShieldedOutputs(testOutputs []outputTestVector, txOutputs []*output,
 
 	return success
 }
+
+func v1Prefix() []byte {
+	return []byte{
+		0x01, 0x00, 0x00, 0x00, // header: version 1, not overwintered
+	}
+}
+
+func TestParseTransparentRejectsCountsThatCannotFit(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    []byte
+		wantErr string
+	}{
+		{
+			name:    "transparent inputs",
+			data:    append(v1Prefix(), 0x01),
+			wantErr: "tx_in_count 1 exceeds remaining input length 0",
+		},
+		{
+			name:    "transparent outputs",
+			data:    append(v1Prefix(), 0x00, 0x01),
+			wantErr: "tx_out_count 1 exceeds remaining input length 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := NewTransaction()
+			_, err := tx.ParseFromSlice(tt.data)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error mismatch:\nhave: %v\nwant substring: %s", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func requireErrorContains(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("error mismatch:\nhave: %v\nwant substring: %s", err, want)
+	}
+}
+
+func saplingV4Prefix() []byte {
+	return []byte{
+		0x04, 0x00, 0x00, 0x80, // header: version 4, overwintered
+		0x00, 0x00, 0x00, 0x00, // nVersionGroupId
+		0x00,                   // tx_in_count
+		0x00,                   // tx_out_count
+		0x00, 0x00, 0x00, 0x00, // nLockTime
+		0x00, 0x00, 0x00, 0x00, // nExpiryHeight
+		0x00, 0x00, 0x00, 0x00, // valueBalance
+		0x00, 0x00, 0x00, 0x00,
+	}
+}
+
+func TestParsePreV5RejectsCountsThatCannotFit(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    []byte
+		wantErr string
+	}{
+		{
+			name:    "sapling spends",
+			data:    append(saplingV4Prefix(), 0x01),
+			wantErr: "nShieldedSpend 1 exceeds remaining input length 0",
+		},
+		{
+			name:    "sapling outputs",
+			data:    append(saplingV4Prefix(), 0x00, 0x01),
+			wantErr: "nShieldedOutput 1 exceeds remaining input length 0",
+		},
+		{
+			name:    "join splits",
+			data:    append(saplingV4Prefix(), 0x00, 0x00, 0x01),
+			wantErr: "nJoinSplit 1 exceeds remaining input length 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := NewTransaction()
+			_, err := tx.ParseFromSlice(tt.data)
+			requireErrorContains(t, err, tt.wantErr)
+		})
+	}
+}

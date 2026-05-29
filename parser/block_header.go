@@ -165,8 +165,18 @@ func (hdr *BlockHeader) ParseFromSlice(in []byte) (rest []byte, err error) {
 		return in, errors.New("could not read Nonce bytes")
 	}
 
-	if !s.ReadCompactLengthPrefixed((*bytestring.String)(&hdr.Solution)) {
-		return in, errors.New("could not read CompactSize-prefixed Equihash solution")
+	{
+		var length int
+		if !s.ReadCompactSize(&length) {
+			return in, errors.New("could not read compact size of solution")
+		}
+		if err := rejectCountExceedingRemaining("solution_length", length, len(s), 1); err != nil {
+			return in, err
+		}
+		hdr.Solution = make([]byte, length)
+		if !s.ReadBytes(&hdr.Solution, length) {
+			return in, errors.New("could not read CompactSize-prefixed Equihash solution")
+		}
 	}
 
 	// TODO: interpret the bytes
