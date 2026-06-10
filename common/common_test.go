@@ -101,7 +101,7 @@ func afterStub(d time.Duration) <-chan time.Time {
 
 // ------------------------------------------ GetLightdInfo()
 
-func getLightdInfoStub(method string, params []json.RawMessage) (json.RawMessage, error) {
+func getLightdInfoStub(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 	step++
 	switch method {
 	case "getinfo":
@@ -189,7 +189,7 @@ func checkSleepMethod(count int, duration time.Duration, expected string, method
 }
 
 // There are four test blocks, 0..3
-func blockIngestorStub(method string, params []json.RawMessage) (json.RawMessage, error) {
+func blockIngestorStub(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 	step++
 	// request the first two blocks very quickly (syncing),
 	// then next block isn't yet available
@@ -383,7 +383,7 @@ func TestBlockIngestor(t *testing.T) {
 
 // There are four test blocks, 0..3
 // (probably don't need all these cases)
-func getblockStub(method string, params []json.RawMessage) (json.RawMessage, error) {
+func getblockStub(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 	if method != "getblock" {
 		testT.Error("unexpected method")
 	}
@@ -543,8 +543,36 @@ func TestGetBlockRange(t *testing.T) {
 	os.RemoveAll(unitTestPath)
 }
 
+func TestGetBlockRangeCancelsInFlightRPC(t *testing.T) {
+	RawRequest = func(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	os.RemoveAll(unitTestPath)
+	testcache = NewBlockCache(unitTestPath, unitTestChain, 380640, 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	blockChan := make(chan *walletrpc.CompactBlock)
+	errChan := make(chan error, 1)
+	blockRange := &walletrpc.BlockRange{
+		Start: &walletrpc.BlockID{Height: 380640},
+		End:   &walletrpc.BlockID{Height: 380640},
+	}
+	done := make(chan struct{})
+	go func() {
+		GetBlockRange(ctx, testcache, blockChan, errChan, blockRange)
+		close(done)
+	}()
+	cancel()
+	select {
+	case <-time.After(2 * time.Second):
+		t.Fatal("GetBlockRange did not exit after context cancellation")
+	case <-done:
+	}
+	os.RemoveAll(unitTestPath)
+}
+
 // There are four test blocks, 0..3
-func getblockStubReverse(method string, params []json.RawMessage) (json.RawMessage, error) {
+func getblockStubReverse(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 	var height string
 	err := json.Unmarshal(params[0], &height)
 	if err != nil {
@@ -634,7 +662,7 @@ func TestGenerateCerts(t *testing.T) {
 // Note that in mocking zcashd's RPC replies here, we don't really need
 // actual txids or transactions, or even strings with the correct format
 // for those, except that a transaction must be a hex string.
-func mempoolStub(method string, params []json.RawMessage) (json.RawMessage, error) {
+func mempoolStub(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 	step++
 	switch step {
 	case 1:
@@ -823,7 +851,7 @@ func TestMempoolStreamCancelOnEmptyMempool(t *testing.T) {
 	// Stub RawRequest to return a stable empty-mempool / stable-tip world,
 	// so the loop parks at the cancel-aware sleep with no work and no tip
 	// change to break out.
-	RawRequest = func(method string, params []json.RawMessage) (json.RawMessage, error) {
+	RawRequest = func(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 		switch method {
 		case "getblockchaininfo":
 			r, _ := json.Marshal(&ZcashdRpcReplyGetblockchaininfo{

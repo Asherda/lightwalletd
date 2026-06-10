@@ -97,7 +97,7 @@ func (s *lwdStreamer) GetTaddressTxids(addressBlockFilter *walletrpc.Transparent
 		return err
 	}
 	params[0] = param
-	result, rpcErr := common.RawRequest("getaddresstxids", params)
+	result, rpcErr := common.RawRequest(resp.Context(), "getaddresstxids", params)
 
 	// For some reason, the error responses are not JSON
 	if rpcErr != nil {
@@ -141,7 +141,7 @@ func (s *lwdStreamer) GetBlock(ctx context.Context, id *walletrpc.BlockID) (*wal
 		// TODO: Get block by hash
 		return nil, errors.New("GetBlock by Hash is not yet implemented")
 	}
-	cBlock, err := common.GetBlock(s.cache, int(id.Height))
+	cBlock, err := common.GetBlock(ctx, s.cache, int(id.Height))
 
 	if err != nil {
 		return nil, err
@@ -221,7 +221,7 @@ func (s *lwdStreamer) GetTreeState(ctx context.Context, id *walletrpc.BlockID) (
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		result, rpcErr := common.RawRequest("z_gettreestate", params)
+		result, rpcErr := common.RawRequest(ctx, "z_gettreestate", params)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -283,7 +283,7 @@ func (s *lwdStreamer) GetTransaction(ctx context.Context, txf *walletrpc.TxFilte
 		}
 
 		params := []json.RawMessage{txidJSON, json.RawMessage("1")}
-		result, rpcErr := common.RawRequest("getrawtransaction", params)
+		result, rpcErr := common.RawRequest(ctx, "getrawtransaction", params)
 		if rpcErr != nil {
 			// For some reason, the error responses are not JSON
 			return nil, rpcErr
@@ -331,7 +331,7 @@ func (s *lwdStreamer) SendTransaction(ctx context.Context, rawtx *walletrpc.RawT
 		return &walletrpc.SendResponse{}, err
 	}
 	params[0] = txJSON
-	result, rpcErr := common.RawRequest("sendrawtransaction", params)
+	result, rpcErr := common.RawRequest(ctx, "sendrawtransaction", params)
 
 	var errCode int64
 	var errMsg string
@@ -363,7 +363,7 @@ func (s *lwdStreamer) SendTransaction(ctx context.Context, rawtx *walletrpc.RawT
 	return r, nil
 }
 
-func getTaddressBalanceZcashdRpc(addressList []string) (*walletrpc.Balance, error) {
+func getTaddressBalanceZcashdRpc(ctx context.Context, addressList []string) (*walletrpc.Balance, error) {
 	for _, addr := range addressList {
 		if err := checkTaddress(addr); err != nil {
 			return &walletrpc.Balance{}, err
@@ -379,7 +379,7 @@ func getTaddressBalanceZcashdRpc(addressList []string) (*walletrpc.Balance, erro
 	}
 	params[0] = param
 
-	result, rpcErr := common.RawRequest("getaddressbalance", params)
+	result, rpcErr := common.RawRequest(ctx, "getaddressbalance", params)
 	if rpcErr != nil {
 		return &walletrpc.Balance{}, rpcErr
 	}
@@ -394,7 +394,7 @@ func getTaddressBalanceZcashdRpc(addressList []string) (*walletrpc.Balance, erro
 // GetTaddressBalance returns the total balance for a list of taddrs
 func (s *lwdStreamer) GetTaddressBalance(ctx context.Context, addresses *walletrpc.AddressList) (*walletrpc.Balance, error) {
 	common.Log.Debugf("gRPC GetTaddressBalance(%+v)\n", addresses)
-	r, err := getTaddressBalanceZcashdRpc(addresses.Addresses)
+	r, err := getTaddressBalanceZcashdRpc(ctx, addresses.Addresses)
 	if err == nil {
 		common.Log.Tracef("  return: %+v\n", r)
 	}
@@ -415,7 +415,7 @@ func (s *lwdStreamer) GetTaddressBalanceStream(addresses walletrpc.CompactTxStre
 		}
 		addressList = append(addressList, addr.Address)
 	}
-	balance, err := getTaddressBalanceZcashdRpc(addressList)
+	balance, err := getTaddressBalanceZcashdRpc(addresses.Context(), addressList)
 	if err != nil {
 		return err
 	}
@@ -432,7 +432,7 @@ func (s *lwdStreamer) GetMempoolStream(_empty *walletrpc.Empty, resp walletrpc.C
 	return err
 }
 
-func getAddressUtxos(arg *walletrpc.GetAddressUtxosArg, f func(*walletrpc.GetAddressUtxosReply) error) error {
+func getAddressUtxos(ctx context.Context, arg *walletrpc.GetAddressUtxosArg, f func(*walletrpc.GetAddressUtxosReply) error) error {
 	for _, a := range arg.Addresses {
 		if err := checkTaddress(a); err != nil {
 			return err
@@ -447,7 +447,7 @@ func getAddressUtxos(arg *walletrpc.GetAddressUtxosArg, f func(*walletrpc.GetAdd
 		return err
 	}
 	params[0] = param
-	result, rpcErr := common.RawRequest("getaddressutxos", params)
+	result, rpcErr := common.RawRequest(ctx, "getaddressutxos", params)
 	if rpcErr != nil {
 		return rpcErr
 	}
@@ -491,7 +491,7 @@ func getAddressUtxos(arg *walletrpc.GetAddressUtxosArg, f func(*walletrpc.GetAdd
 func (s *lwdStreamer) GetAddressUtxos(ctx context.Context, arg *walletrpc.GetAddressUtxosArg) (*walletrpc.GetAddressUtxosReplyList, error) {
 	common.Log.Debugf("gRPC GetAddressUtxos(%+v)\n", arg)
 	addressUtxos := make([]*walletrpc.GetAddressUtxosReply, 0)
-	err := getAddressUtxos(arg, func(utxo *walletrpc.GetAddressUtxosReply) error {
+	err := getAddressUtxos(ctx, arg, func(utxo *walletrpc.GetAddressUtxosReply) error {
 		addressUtxos = append(addressUtxos, utxo)
 		return nil
 	})
@@ -505,7 +505,7 @@ func (s *lwdStreamer) GetAddressUtxos(ctx context.Context, arg *walletrpc.GetAdd
 
 func (s *lwdStreamer) GetAddressUtxosStream(arg *walletrpc.GetAddressUtxosArg, resp walletrpc.CompactTxStreamer_GetAddressUtxosStreamServer) error {
 	common.Log.Debugf("gRPC GetAddressUtxosStream(%+v)\n", arg)
-	err := getAddressUtxos(arg, func(utxo *walletrpc.GetAddressUtxosReply) error {
+	err := getAddressUtxos(resp.Context(), arg, func(utxo *walletrpc.GetAddressUtxosReply) error {
 		return resp.Send(utxo)
 	})
 	if err != nil {

@@ -135,7 +135,7 @@ func TestGetTransaction(t *testing.T) {
 	}
 }
 
-func getblockStub(method string, params []json.RawMessage) (json.RawMessage, error) {
+func getblockStub(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 	step++
 	var height string
 	err := json.Unmarshal(params[0], &height)
@@ -177,7 +177,7 @@ func TestGetLatestBlock(t *testing.T) {
 	}
 
 	// This does zcashd rpc "getblock", calls getblockStub() above
-	block, err := common.GetBlock(cache, 380640)
+	block, err := common.GetBlock(context.Background(), cache, 380640)
 	if err != nil {
 		t.Fatal("getBlockFromRPC failed", err)
 	}
@@ -212,7 +212,7 @@ var addressTests = []string{
 	"t1234567890123456789012345678901234\n", // newline after
 }
 
-func zcashdrpcStub(method string, params []json.RawMessage) (json.RawMessage, error) {
+func zcashdrpcStub(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 	step++
 	switch method {
 	case "getaddresstxids":
@@ -446,7 +446,7 @@ func TestGetBlockRangeNilArgs(t *testing.T) {
 	}
 }
 
-func sendrawtransactionStub(method string, params []json.RawMessage) (json.RawMessage, error) {
+func sendrawtransactionStub(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 	step++
 	if method != "sendrawtransaction" {
 		testT.Fatal("unexpected method")

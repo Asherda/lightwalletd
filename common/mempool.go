@@ -54,7 +54,7 @@ func GetMempool(ctx context.Context, sendToClient func(*walletrpc.RawTransaction
 		// Don't fetch the mempool more often than every 2 seconds.
 		now := Time.Now()
 		if now.After(g_lastTime.Add(2 * time.Second)) {
-			blockChainInfo, err := getLatestBlockChainInfo()
+			blockChainInfo, err := getLatestBlockChainInfo(ctx)
 			if err != nil {
 				g_lock.Unlock()
 				return err
@@ -69,7 +69,7 @@ func GetMempool(ctx context.Context, sendToClient func(*walletrpc.RawTransaction
 				g_lastTime = time.Time{}
 				break
 			}
-			if err = refreshMempoolTxns(); err != nil {
+			if err = refreshMempoolTxns(ctx); err != nil {
 				g_lock.Unlock()
 				return err
 			}
@@ -103,11 +103,11 @@ func GetMempool(ctx context.Context, sendToClient func(*walletrpc.RawTransaction
 }
 
 // RefreshMempoolTxns gets all new mempool txns and sends any new ones to waiting clients
-func refreshMempoolTxns() error {
+func refreshMempoolTxns(ctx context.Context) error {
 	Log.Infoln("Refreshing mempool")
 
 	params := []json.RawMessage{}
-	result, rpcErr := RawRequest("getrawmempool", params)
+	result, rpcErr := RawRequest(ctx, "getrawmempool", params)
 	if rpcErr != nil {
 		return rpcErr
 	}
@@ -132,7 +132,7 @@ func refreshMempoolTxns() error {
 		}
 
 		params := []json.RawMessage{txidJSON, json.RawMessage("1")}
-		result, rpcErr := RawRequest("getrawtransaction", params)
+		result, rpcErr := RawRequest(ctx, "getrawtransaction", params)
 		if rpcErr != nil {
 			// Not an error; mempool transactions can disappear
 			continue
@@ -155,8 +155,8 @@ func refreshMempoolTxns() error {
 	return nil
 }
 
-func getLatestBlockChainInfo() (*ZcashdRpcReplyGetblockchaininfo, error) {
-	result, rpcErr := RawRequest("getblockchaininfo", []json.RawMessage{})
+func getLatestBlockChainInfo(ctx context.Context) (*ZcashdRpcReplyGetblockchaininfo, error) {
+	result, rpcErr := RawRequest(ctx, "getblockchaininfo", []json.RawMessage{})
 	if rpcErr != nil {
 		return nil, rpcErr
 	}

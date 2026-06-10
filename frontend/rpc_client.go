@@ -13,9 +13,25 @@ import (
 	ini "gopkg.in/ini.v1"
 )
 
+// ConnConfigFromConf reads the zcashd configuration file.
+func ConnConfigFromConf(confPath interface{}) (*rpcclient.ConnConfig, error) {
+	return connFromConf(confPath)
+}
+
+// ConnConfigFromFlags builds an RPC connection config from provided flags.
+func ConnConfigFromFlags(opts *common.Options) *rpcclient.ConnConfig {
+	return &rpcclient.ConnConfig{
+		Host:         net.JoinHostPort(opts.RPCHost, opts.RPCPort),
+		User:         opts.RPCUser,
+		Pass:         opts.RPCPassword,
+		HTTPPostMode: true, // Zcash only supports HTTP POST mode
+		DisableTLS:   true, // Zcash does not provide TLS by default
+	}
+}
+
 // NewZRPCFromConf reads the zcashd configuration file.
 func NewZRPCFromConf(confPath interface{}) (*rpcclient.Client, error) {
-	connCfg, err := connFromConf(confPath)
+	connCfg, err := ConnConfigFromConf(confPath)
 	if err != nil {
 		return nil, err
 	}
@@ -24,15 +40,7 @@ func NewZRPCFromConf(confPath interface{}) (*rpcclient.Client, error) {
 
 // NewZRPCFromFlags gets zcashd rpc connection information from provided flags.
 func NewZRPCFromFlags(opts *common.Options) (*rpcclient.Client, error) {
-	// Connect to local Zcash RPC server using HTTP POST mode.
-	connCfg := &rpcclient.ConnConfig{
-		Host:         net.JoinHostPort(opts.RPCHost, opts.RPCPort),
-		User:         opts.RPCUser,
-		Pass:         opts.RPCPassword,
-		HTTPPostMode: true, // Zcash only supports HTTP POST mode
-		DisableTLS:   true, // Zcash does not provide TLS by default
-	}
-	return rpcclient.New(connCfg, nil)
+	return rpcclient.New(ConnConfigFromFlags(opts), nil)
 }
 
 // If passed a string, interpret as a path, open and read; if passed

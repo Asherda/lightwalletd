@@ -3,6 +3,7 @@ package common
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -67,7 +68,12 @@ func DarksideInit(c *BlockCache, timeout int) {
 	Log.Info("Darkside mode running")
 	DarksideEnabled = true
 	state.cache = c
-	RawRequest = darksideRawRequest
+	RawRequest = func(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return darksideRawRequest(method, params)
+	}
 	go func() {
 		time.Sleep(time.Duration(timeout) * time.Minute)
 		Log.Fatal("Shutting down darksidewalletd to prevent accidental deployment in production.")

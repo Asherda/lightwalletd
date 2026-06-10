@@ -49,10 +49,10 @@ type Options struct {
 	DarksideTimeout     uint64 `json:"darkside_timeout"`
 }
 
-// RawRequest points to the function to send a an RPC request to zcashd;
-// in production, it points to btcsuite/btcd/rpcclient/rawrequest.go:RawRequest();
+// RawRequest points to the function to send an RPC request to zcashd;
+// in production, it points to frontend.NewContextRawRequest();
 // in unit tests it points to a function to mock RPCs to zcashd.
-var RawRequest func(method string, params []json.RawMessage) (json.RawMessage, error)
+var RawRequest func(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error)
 
 // Time allows time-related functions to be mocked for testing,
 // so that tests can be deterministic and so they don't require
@@ -152,7 +152,7 @@ type (
 func FirstRPC() {
 	retryCount := 0
 	for {
-		result, rpcErr := RawRequest("getblockchaininfo", []json.RawMessage{})
+		result, rpcErr := RawRequest(context.Background(), "getblockchaininfo", []json.RawMessage{})
 		if rpcErr == nil {
 			if retryCount > 0 {
 				Log.Warn("getblockchaininfo RPC successful")
@@ -179,7 +179,7 @@ func FirstRPC() {
 }
 
 func GetLightdInfo() (*walletrpc.LightdInfo, error) {
-	result, rpcErr := RawRequest("getinfo", []json.RawMessage{})
+	result, rpcErr := RawRequest(context.Background(), "getinfo", []json.RawMessage{})
 	if rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -189,7 +189,7 @@ func GetLightdInfo() (*walletrpc.LightdInfo, error) {
 		return nil, rpcErr
 	}
 
-	result, rpcErr = RawRequest("getblockchaininfo", []json.RawMessage{})
+	result, rpcErr = RawRequest(context.Background(), "getblockchaininfo", []json.RawMessage{})
 	if rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -226,7 +226,7 @@ func GetLightdInfo() (*walletrpc.LightdInfo, error) {
 	}, nil
 }
 
-func getBlockFromRPC(height int, cache *BlockCache) (*walletrpc.CompactBlock, error) {
+func getBlockFromRPC(ctx context.Context, height int, cache *BlockCache) (*walletrpc.CompactBlock, error) {
 	params := make([]json.RawMessage, 2)
 	heightJSON, err := json.Marshal(strconv.Itoa(height))
 	if err != nil {
@@ -234,7 +234,7 @@ func getBlockFromRPC(height int, cache *BlockCache) (*walletrpc.CompactBlock, er
 	}
 	params[0] = heightJSON
 	params[1] = json.RawMessage("0") // non-verbose (raw hex)
-	result, rpcErr := RawRequest("getblock", params)
+	result, rpcErr := RawRequest(ctx, "getblock", params)
 
 	// For some reason, the error responses are not JSON
 	if rpcErr != nil {
@@ -310,7 +310,7 @@ func BlockIngestor(c *BlockCache, rep int) {
 		default:
 		}
 
-		result, err := RawRequest("getbestblockhash", []json.RawMessage{})
+		result, err := RawRequest(context.Background(), "getbestblockhash", []json.RawMessage{})
 		if err != nil {
 			Log.WithFields(logrus.Fields{
 				"error": err,
@@ -340,7 +340,7 @@ func BlockIngestor(c *BlockCache, rep int) {
 			continue
 		}
 		var block *walletrpc.CompactBlock
-		block, err = getBlockFromRPC(height, c)
+		block, err = getBlockFromRPC(context.Background(), height, c)
 		if err != nil {
 			Log.Fatal("getblock ", height, " failed, will retry: ", err)
 		}
@@ -370,7 +370,7 @@ func BlockIngestor(c *BlockCache, rep int) {
 // GetBlock returns the compact block at the requested height, first by querying
 // the cache, then, if not found, will request the block from zcashd. It returns
 // nil if no block exists at this height.
-func GetBlock(cache *BlockCache, height int) (*walletrpc.CompactBlock, error) {
+func GetBlock(ctx context.Context, cache *BlockCache, height int) (*walletrpc.CompactBlock, error) {
 	// First, check the cache to see if we have the block
 	block := cache.Get(height)
 	if block != nil {
@@ -378,7 +378,7 @@ func GetBlock(cache *BlockCache, height int) (*walletrpc.CompactBlock, error) {
 	}
 
 	// Not in the cache, ask zcashd
-	block, err := getBlockFromRPC(height, cache)
+	block, err := getBlockFromRPC(ctx, height, cache)
 	//block, err := getBlockFromRPC(height)
 	if err != nil {
 		return nil, err
@@ -410,7 +410,7 @@ func GetBlockRange(ctx context.Context, cache *BlockCache, blockOut chan<- *wall
 			// reverse the order
 			j = high - (i - low)
 		}
-		block, err := GetBlock(cache, j)
+		block, err := GetBlock(ctx, cache, j)
 		if err != nil {
 			select {
 			case errOut <- err:
