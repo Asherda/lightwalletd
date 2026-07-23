@@ -897,12 +897,19 @@ func TestParseTransparentRejectsCountsThatCannotFit(t *testing.T) {
 		{
 			name:    "transparent inputs",
 			data:    append(v1Prefix(), 0x01),
-			wantErr: "tx_in_count 1 exceeds remaining input length 0",
+			wantErr: "tx_in_count 1 requires at least 41 bytes, but only 0 remain",
 		},
 		{
 			name:    "transparent outputs",
 			data:    append(v1Prefix(), 0x00, 0x01),
-			wantErr: "tx_out_count 1 exceeds remaining input length 0",
+			wantErr: "tx_out_count 1 requires at least 9 bytes, but only 0 remain",
+		},
+		{
+			// A count far larger than one, with a non-trivial amount of input
+			// left, to exercise the division rather than the count==1 edge.
+			name:    "many transparent outputs",
+			data:    append(append(v1Prefix(), 0x00, 0xfd, 0xe8, 0x03), make([]byte, 100)...),
+			wantErr: "tx_out_count 1000 requires at least 9000 bytes, but only 100 remain",
 		},
 	}
 
@@ -917,6 +924,38 @@ func TestParseTransparentRejectsCountsThatCannotFit(t *testing.T) {
 				t.Fatalf("error mismatch:\nhave: %v\nwant substring: %s", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// The bounds checks must never reject input that would otherwise have parsed.
+// Feed each check a structure holding exactly its minimum-size elements, so a
+// bound that was tightened by even one byte would fail here.
+func TestBoundsChecksAcceptMinimallySizedElements(t *testing.T) {
+	var raw bytes.Buffer
+	raw.Write(v1Prefix())       // header
+	raw.WriteByte(0x01)         // tx_in_count
+	raw.Write(make([]byte, 32)) // prevout hash
+	raw.Write(make([]byte, 4))  // prevout index
+	raw.WriteByte(0x00)         // script length (empty script)
+	raw.Write(make([]byte, 4))  // sequence
+	raw.WriteByte(0x01)         // tx_out_count
+	raw.Write(make([]byte, 8))  // value
+	raw.WriteByte(0x00)         // script length (empty script)
+	raw.Write(make([]byte, 4))  // nLockTime
+
+	tx := NewTransaction()
+	rest, err := tx.ParseFromSlice(raw.Bytes())
+	if err != nil {
+		t.Fatalf("minimally sized transparent elements rejected: %v", err)
+	}
+	if len(rest) != 0 {
+		t.Fatalf("did not consume entire buffer, %d remaining", len(rest))
+	}
+	if len(tx.transparentInputs) != 1 {
+		t.Fatal("tx_in_count miscompare")
+	}
+	if len(tx.transparentOutputs) != 1 {
+		t.Fatal("tx_out_count miscompare")
 	}
 }
 
@@ -938,7 +977,7 @@ func saplingV4Prefix() []byte {
 		0x00,                   // tx_out_count
 		0x00, 0x00, 0x00, 0x00, // nLockTime
 		0x00, 0x00, 0x00, 0x00, // nExpiryHeight
-		0x00, 0x00, 0x00, 0x00, // valueBalance
+		0x00, 0x00, 0x00, 0x00, // valueBalanceSapling (int64)
 		0x00, 0x00, 0x00, 0x00,
 	}
 }
@@ -952,17 +991,17 @@ func TestParsePreV5RejectsCountsThatCannotFit(t *testing.T) {
 		{
 			name:    "sapling spends",
 			data:    append(saplingV4Prefix(), 0x01),
-			wantErr: "nShieldedSpend 1 exceeds remaining input length 0",
+			wantErr: "nShieldedSpend 1 requires at least 384 bytes, but only 0 remain",
 		},
 		{
 			name:    "sapling outputs",
 			data:    append(saplingV4Prefix(), 0x00, 0x01),
-			wantErr: "nShieldedOutput 1 exceeds remaining input length 0",
+			wantErr: "nShieldedOutput 1 requires at least 948 bytes, but only 0 remain",
 		},
 		{
 			name:    "join splits",
 			data:    append(saplingV4Prefix(), 0x00, 0x00, 0x01),
-			wantErr: "nJoinSplit 1 exceeds remaining input length 0",
+			wantErr: "nJoinSplit 1 requires at least 1698 bytes, but only 0 remain",
 		},
 	}
 

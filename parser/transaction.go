@@ -7,7 +7,6 @@ package parser
 
 import (
 	"crypto/sha256"
-	"fmt"
 
 	"github.com/asherda/lightwalletd/parser/internal/bytestring"
 	"github.com/asherda/lightwalletd/walletrpc"
@@ -89,29 +88,6 @@ func (tx *txOut) ParseFromSlice(data []byte) ([]byte, error) {
 	}
 
 	return []byte(s), nil
-}
-
-const (
-	minTxInWireBytes        = 41  // 32-byte prevout hash + 4-byte index + 1-byte script length + 4-byte sequence
-	minTxOutWireBytes       = 9   // 8-byte value + 1-byte script length
-	minSaplingV4SpendBytes  = 384 // cv + anchor + nullifier + rk + zkproof + spendAuthSig
-	minSaplingV4OutputBytes = 948 // cv + cmu + ephemeralKey + encCiphertext + outCiphertext + zkproof
-	minJoinSplitGrothBytes  = 1698
-	minJoinSplitPHGRBytes   = 1802
-)
-
-func rejectCountExceedingRemaining(label string, count int, remaining int, minElementBytes int) error {
-	if count > remaining/minElementBytes {
-		return fmt.Errorf("%s %d exceeds remaining input length %d", label, count, remaining)
-	}
-	return nil
-}
-
-func minJoinSplitWireBytes(isGroth16Proof bool) int {
-	if isGroth16Proof {
-		return minJoinSplitGrothBytes
-	}
-	return minJoinSplitPHGRBytes
 }
 
 func (tx *Transaction) isGroth16Proof() bool {
