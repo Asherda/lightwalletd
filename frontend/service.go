@@ -185,6 +185,9 @@ func (s *lwdStreamer) GetBlockRange(span *walletrpc.BlockRange, resp walletrpc.C
 // GetTreeState returns the note commitment tree state corresponding to the given block.
 // See section 3.7 of the Zcash protocol specification. It returns several other useful
 // values also (even though they can be obtained using GetBlock).
+// blockHashLen is the length in bytes of a Zcash block hash.
+const blockHashLen = len(hash32.T{})
+
 // The block can be specified by either height or hash.
 func (s *lwdStreamer) GetTreeState(ctx context.Context, id *walletrpc.BlockID) (*walletrpc.TreeState, error) {
 	if id.Height == 0 && id.Hash == nil {
@@ -201,6 +204,15 @@ func (s *lwdStreamer) GetTreeState(ctx context.Context, id *walletrpc.BlockID) (
 		common.Log.Debugf("gRPC GetTreeState(height=%+v)\n", id.Height)
 		params[0] = heightJSON
 	} else {
+		// Reject a wrong-length hash before expanding it: the bytes below are
+		// hex-encoded (doubling them) and JSON-marshalled before zcashd ever
+		// sees them, so without this an unauthenticated client can force large
+		// allocations here and parsing work in the backend with input that can
+		// only ever be rejected (GHSA-q2c2-hpp9-58hm).
+		if len(id.Hash) != blockHashLen {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"GetTreeState: block hash has invalid length: %d", len(id.Hash))
+		}
 		// id.Hash is big-endian, keep in big-endian for the rpc
 		hash := hex.EncodeToString(id.Hash)
 		common.Log.Debugf("gRPC GetTreeState(hash=%+v)\n", hash)
@@ -309,6 +321,12 @@ func (s *lwdStreamer) GetLightdInfo(ctx context.Context, in *walletrpc.Empty) (*
 	return common.GetLightdInfo()
 }
 
+// maxRawTxSize bounds the raw transaction bytes lightwalletd will forward to
+// zcashd. A Zcash transaction cannot exceed the 2,000,000-byte block size
+// limit, so anything larger is unminable by definition and there is no reason
+// to spend memory expanding it or to make the backend parse it.
+const maxRawTxSize = 2000000
+
 // SendTransaction forwards raw transaction bytes to a zcashd instance over JSON-RPC
 func (s *lwdStreamer) SendTransaction(ctx context.Context, rawtx *walletrpc.RawTransaction) (*walletrpc.SendResponse, error) {
 	common.Log.Debugf("gRPC SendTransaction(%+v)\n", rawtx)
@@ -322,6 +340,16 @@ func (s *lwdStreamer) SendTransaction(ctx context.Context, rawtx *walletrpc.RawT
 	// Verify rawtx
 	if rawtx == nil || rawtx.Data == nil {
 		return nil, errors.New("Bad transaction data")
+	}
+	// Reject an oversized transaction before expanding it: the bytes below are
+	// hex-encoded (doubling them) and JSON-marshalled before zcashd ever sees
+	// them, so without this an unauthenticated client can force large
+	// allocations here and parsing work in the backend with a transaction that
+	// can never be mined (GHSA-6ppp-r2gc-9q6v).
+	if len(rawtx.Data) > maxRawTxSize {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"SendTransaction: transaction is too large: %d bytes (limit %d)",
+			len(rawtx.Data), maxRawTxSize)
 	}
 
 	// Construct raw JSON-RPC params
