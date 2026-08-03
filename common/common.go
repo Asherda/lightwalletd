@@ -5,6 +5,7 @@
 package common
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +17,8 @@ import (
 	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // 'make build' will overwrite this string with the output of git-describe (tag)
@@ -400,13 +403,19 @@ func GetBlockRange(ctx context.Context, cache *BlockCache, blockOut chan<- *wall
 	// Go over [start, end] inclusive
 	low := start
 	high := end
-	if start > end {
+	backward := start > end
+	if backward {
 		// reverse the order
 		low, high = end, start
 	}
+	// The hash that the next block must match to prove it's adjacent to the one
+	// just sent. Going forward that's the hash of the block just sent, which
+	// the next block must name as its parent; going backward it's that block's
+	// parent, which the next block must be. Nil before the first block is sent.
+	var wantHash []byte
 	for i := low; i <= high; i++ {
 		j := i
-		if start > end {
+		if backward {
 			// reverse the order
 			j = high - (i - low)
 		}
@@ -418,10 +427,30 @@ func GetBlockRange(ctx context.Context, cache *BlockCache, blockOut chan<- *wall
 			}
 			return
 		}
+		// The field of this block that has to match wantHash (see above).
+		gotHash := block.PrevHash
+		if backward {
+			gotHash = block.Hash
+		}
+		if wantHash != nil && !bytes.Equal(gotHash, wantHash) {
+			// The cache and the backend disagree about the chain, which is the
+			// state the node is in while the ingestor repairs a reorg. Fail
+			// rather than serve a sequence of blocks that can't exist.
+			select {
+			case errOut <- status.Error(codes.Aborted,
+				"GetBlockRange: chain discontinuity during reorg repair"):
+			case <-ctx.Done():
+			}
+			return
+		}
 		select {
 		case blockOut <- block:
 		case <-ctx.Done():
 			return
+		}
+		wantHash = block.Hash
+		if backward {
+			wantHash = block.PrevHash
 		}
 	}
 	select {
