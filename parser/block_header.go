@@ -210,7 +210,10 @@ func (hdr *BlockHeader) GetDisplayHash() []byte {
 	//digest = sha256.Sum256(digest[:])
 
 	// VerusHash
-	vh := hashHeader(serializedHeader)
+	vh := verushash.HashHeader(serializedHeader)
+	if vh == nil {
+		return nil
+	}
 	// Convert to big-endian
 	hdr.cachedHash = Reverse(vh)
 	return hdr.cachedHash
@@ -229,29 +232,10 @@ func (hdr *BlockHeader) GetEncodableHash() []byte {
 	//digest = sha256.Sum256(digest[:])
 
 	// Verushash
-	vh := hashHeader(serializedHeader)
-	return vh
+	return verushash.HashHeader(serializedHeader)
 }
 
 // GetDisplayPrevHash returns the block hash in big-endian order.
 func (hdr *BlockHeader) GetDisplayPrevHash() []byte {
 	return Reverse(hdr.HashPrevBlock)
-}
-
-func hashHeader(serializedHeader []byte) []byte {
-	length := len(serializedHeader)
-	if serializedHeader[0] == 4 && serializedHeader[2] >= 1 {
-		if length < 144 || serializedHeader[143] < 3 {
-			return verushash.VerusHash_V2B(serializedHeader)
-		} else {
-			if serializedHeader[143] < 4 {
-				return verushash.VerusHash_V2B1(serializedHeader)
-			} else {
-				//		fmt.Println(hex.EncodeToString(Reverse(verushash.VerusHash_V2B2(serializedHeader))))
-				return verushash.VerusHash_V2B2(serializedHeader)
-			}
-		}
-	} else {
-		return verushash.VerusHash(serializedHeader)
-	}
 }

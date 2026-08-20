@@ -57,6 +57,8 @@ func TestParseNBits(t *testing.T) {
 	}
 }
 
+const posNonceVerusV2 = 0x00010004
+
 func TestBlockHeader(t *testing.T) {
 	testBlocks, err := os.Open("../testdata/blocks")
 	if err != nil {
@@ -84,7 +86,7 @@ func TestBlockHeader(t *testing.T) {
 		}
 
 		// Some basic sanity checks
-		if blockHeader.Version != 4 {
+		if blockHeader.Version != posNonceVerusV2 {
 			t.Error("Read wrong version in a test block.")
 			break
 		}
@@ -133,12 +135,6 @@ func TestBlockHeader(t *testing.T) {
 			t.Error("caching is broken")
 		}
 
-		// This is not necessarily true for anything but our current test cases.
-		for _, b := range hash[:4] {
-			if b != 0 {
-				t.Errorf("Hash lacked leading zeros: %x", hash)
-			}
-		}
 		if prevHash != nil && !bytes.Equal(blockHeader.GetDisplayPrevHash(), prevHash) {
 			t.Errorf("Previous hash mismatch")
 		}

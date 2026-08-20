@@ -21,6 +21,8 @@ import (
 	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -68,7 +70,12 @@ func TestMain(m *testing.M) {
 		blockJSON, _ := json.Marshal(scan.Text())
 		blocks = append(blocks, blockJSON)
 	}
-	testcache = NewBlockCache(unitTestPath, unitTestChain, 380640, true)
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	if err != nil {
+		os.Stderr.WriteString(fmt.Sprintf("Cannot open test cache db: %v", err))
+		os.Exit(1)
+	}
+	testcache = NewBlockCache(db, unitTestChain, 380640, true)
 
 	// Setup is done; run all tests.
 	exitcode := m.Run()
@@ -122,9 +129,10 @@ func getLightdInfoStub(ctx context.Context, method string, params []json.RawMess
 				testT.Error("unexpected sleeps", sleepCount, sleepDuration)
 			}
 		}
+		// GetLightdInfo reports ChainName from `name`.
 		r, _ := json.Marshal(&ZcashdRpcReplyGetblockchaininfo{
 			Blocks:    9977,
-			Chain:     "bugsbunny",
+			Name:      "bugsbunny",
 			Consensus: ConsensusInfo{Chaintip: "someid"},
 		})
 		return r, nil
@@ -371,8 +379,7 @@ func TestBlockIngestor(t *testing.T) {
 	RawRequest = blockIngestorStub
 	Time.Sleep = sleepStub
 	Time.Now = nowStub
-	os.RemoveAll(unitTestPath)
-	testcache = NewBlockCache(unitTestPath, unitTestChain, 380640, false)
+	testcache = NewBlockCache(testCacheDB(t), unitTestChain, 380640, false)
 	BlockIngestor(testcache, 11)
 	if step != 19 {
 		t.Error("unexpected final step", step)
@@ -380,7 +387,6 @@ func TestBlockIngestor(t *testing.T) {
 	step = 0
 	sleepCount = 0
 	sleepDuration = 0
-	os.RemoveAll(unitTestPath)
 }
 
 // ------------------------------------------ GetBlockRange()
@@ -504,8 +510,7 @@ func getblockStub(ctx context.Context, method string, params []json.RawMessage) 
 func TestGetBlockRange(t *testing.T) {
 	testT = t
 	RawRequest = getblockStub
-	os.RemoveAll(unitTestPath)
-	testcache = NewBlockCache(unitTestPath, unitTestChain, 380640, true)
+	testcache = NewBlockCache(testCacheDB(t), unitTestChain, 380640, true)
 	blockChan := make(chan *walletrpc.CompactBlock)
 	errChan := make(chan error)
 	go GetBlockRange(context.Background(), testcache, blockChan, errChan, 380640, 380642)
@@ -544,21 +549,11 @@ func TestGetBlockRange(t *testing.T) {
 	}
 
 	step = 0
-	os.RemoveAll(unitTestPath)
 }
 
-// staleForkCache returns a cache holding a single height-380640 block from a
-// fork that the backend has since reorged away from. Its hash is arbitrary;
-// all that matters is that it differs from the hash of the real height-380640
-// block, which is what the real height-380641 block (blocks[1], served by
-// discontinuityStub below) names as its PrevHash.
-//
-// This is the state described in GHSA-m7j5-wvx3-qj6j: the background ingestor
-// hasn't yet rewound the cache, so a range that spans the cache/backend
-// boundary would mix two forks.
+// staleForkCache returns a cache holding a block with a mismatched hash to simulate a reorg.
 func staleForkCache(t *testing.T) *BlockCache {
-	os.RemoveAll(unitTestPath)
-	cache := NewBlockCache(unitTestPath, unitTestChain, 380640, 0)
+	cache := NewBlockCache(testCacheDB(t), unitTestChain, 380640, false)
 	err := cache.Add(380640, &walletrpc.CompactBlock{
 		Height:   380640,
 		Hash:     bytes.Repeat([]byte{0xa1}, 32),
@@ -570,27 +565,21 @@ func staleForkCache(t *testing.T) *BlockCache {
 	return cache
 }
 
-// discontinuityStub serves only height 380641; height 380640 is satisfied from
-// the cache, so it's never requested from the backend.
+// discontinuityStub mocks RPC getblock for height 380641.
 func discontinuityStub(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
 	if method != "getblock" {
 		testT.Error("unexpected method")
 	}
-	var arg string
-	if err := json.Unmarshal(params[0], &arg); err != nil {
+	var height string
+	if err := json.Unmarshal(params[0], &height); err != nil {
 		testT.Fatal("could not unmarshal height")
 	}
 
 	step++
 	switch step {
 	case 1:
-		if arg != "380641" {
-			testT.Error("unexpected height")
-		}
-		return []byte("{\"Tx\": [\"" + testTxid + "\"], \"Hash\": \"" + testBlockid41 + "\"}"), nil
-	case 2:
-		if arg != testBlockid41 {
-			testT.Error("unexpected hash")
+		if height != "380641" {
+			testT.Error("unexpected height", height)
 		}
 		return blocks[1], nil
 	}
@@ -598,8 +587,22 @@ func discontinuityStub(ctx context.Context, method string, params []json.RawMess
 	return nil, nil
 }
 
-// checkDiscontinuity requires that the next thing GetBlockRange produces is the
-// discontinuity error, rather than another block.
+// resetGlobals restores global state between test runs.
+func resetGlobals() {
+	step = 0
+	sleepCount = 0
+	sleepDuration = 0
+	RawRequest = nil
+	Time.Sleep = nil
+	Time.Now = nil
+	Time.After = nil
+	g_lastBlockChainInfo = &ZcashdRpcReplyGetblockchaininfo{}
+	g_lastTime = time.Time{}
+	g_txidSeen = map[txid]struct{}{}
+	g_txList = []*walletrpc.RawTransaction{}
+}
+
+// checkDiscontinuity verifies GetBlockRange returns a discontinuity error.
 func checkDiscontinuity(t *testing.T, blockChan <-chan *walletrpc.CompactBlock, errChan <-chan error) {
 	t.Helper()
 	select {
@@ -615,22 +618,15 @@ func checkDiscontinuity(t *testing.T, blockChan <-chan *walletrpc.CompactBlock, 
 	}
 }
 
-// A range that spans a stale cached block and the current backend block must
-// fail rather than stream a chain that can't exist.
 func TestGetBlockRangeDiscontinuity(t *testing.T) {
 	testT = t
 	RawRequest = discontinuityStub
 	defer resetGlobals()
 	testcache = staleForkCache(t)
-	defer os.RemoveAll(unitTestPath)
 
 	blockChan := make(chan *walletrpc.CompactBlock)
 	errChan := make(chan error)
-	blockRange := &walletrpc.BlockRange{
-		Start: &walletrpc.BlockID{Height: 380640},
-		End:   &walletrpc.BlockID{Height: 380641},
-	}
-	go GetBlockRange(context.Background(), testcache, blockChan, errChan, blockRange)
+	go GetBlockRange(context.Background(), testcache, blockChan, errChan, 380640, 380641)
 
 	// The stale 380640 goes out before there's anything to compare it
 	// against; the mismatch can only be detected once 380641 arrives.
@@ -646,7 +642,7 @@ func TestGetBlockRangeDiscontinuity(t *testing.T) {
 	// blocks[1].PrevHash is the real 380640 hash, not the stale one.
 	checkDiscontinuity(t, blockChan, errChan)
 
-	if step != 2 {
+	if step != 1 {
 		t.Fatal("unexpected step:", step)
 	}
 }
@@ -658,15 +654,10 @@ func TestGetBlockRangeDiscontinuityReverse(t *testing.T) {
 	RawRequest = discontinuityStub
 	defer resetGlobals()
 	testcache = staleForkCache(t)
-	defer os.RemoveAll(unitTestPath)
 
 	blockChan := make(chan *walletrpc.CompactBlock)
 	errChan := make(chan error)
-	blockRange := &walletrpc.BlockRange{
-		Start: &walletrpc.BlockID{Height: 380641},
-		End:   &walletrpc.BlockID{Height: 380640},
-	}
-	go GetBlockRange(context.Background(), testcache, blockChan, errChan, blockRange)
+	go GetBlockRange(context.Background(), testcache, blockChan, errChan, 380641, 380640)
 
 	// read in block 380641 (from the backend, the current fork)
 	select {
@@ -681,7 +672,7 @@ func TestGetBlockRangeDiscontinuityReverse(t *testing.T) {
 	// The stale cached 380640 isn't the block that 380641 descends from.
 	checkDiscontinuity(t, blockChan, errChan)
 
-	if step != 2 {
+	if step != 1 {
 		t.Fatal("unexpected step:", step)
 	}
 }
@@ -694,9 +685,7 @@ func TestGetBlockRangeContiguousReverse(t *testing.T) {
 	testT = t
 	RawRequest = discontinuityStub
 	defer resetGlobals()
-	os.RemoveAll(unitTestPath)
-	defer os.RemoveAll(unitTestPath)
-	testcache = NewBlockCache(unitTestPath, unitTestChain, 380640, 0)
+	testcache = NewBlockCache(testCacheDB(t), unitTestChain, 380640, false)
 
 	// Cache the real 380640, the block that the backend's 380641 descends from.
 	block := parser.NewBlock()
@@ -717,11 +706,7 @@ func TestGetBlockRangeContiguousReverse(t *testing.T) {
 
 	blockChan := make(chan *walletrpc.CompactBlock)
 	errChan := make(chan error)
-	blockRange := &walletrpc.BlockRange{
-		Start: &walletrpc.BlockID{Height: 380641},
-		End:   &walletrpc.BlockID{Height: 380640},
-	}
-	go GetBlockRange(context.Background(), testcache, blockChan, errChan, blockRange)
+	go GetBlockRange(context.Background(), testcache, blockChan, errChan, 380641, 380640)
 
 	for _, height := range []uint64{380641, 380640} {
 		select {
@@ -743,18 +728,13 @@ func TestGetBlockRangeCancelsInFlightRPC(t *testing.T) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
-	os.RemoveAll(unitTestPath)
-	testcache = NewBlockCache(unitTestPath, unitTestChain, 380640, 0)
+	testcache = NewBlockCache(testCacheDB(t), unitTestChain, 380640, false)
 	ctx, cancel := context.WithCancel(context.Background())
 	blockChan := make(chan *walletrpc.CompactBlock)
 	errChan := make(chan error, 1)
-	blockRange := &walletrpc.BlockRange{
-		Start: &walletrpc.BlockID{Height: 380640},
-		End:   &walletrpc.BlockID{Height: 380640},
-	}
 	done := make(chan struct{})
 	go func() {
-		GetBlockRange(ctx, testcache, blockChan, errChan, blockRange)
+		GetBlockRange(ctx, testcache, blockChan, errChan, 380640, 380640)
 		close(done)
 	}()
 	cancel()
@@ -763,7 +743,6 @@ func TestGetBlockRangeCancelsInFlightRPC(t *testing.T) {
 		t.Fatal("GetBlockRange did not exit after context cancellation")
 	case <-done:
 	}
-	os.RemoveAll(unitTestPath)
 }
 
 // There are four test blocks, 0..3
@@ -802,8 +781,7 @@ func getblockStubReverse(ctx context.Context, method string, params []json.RawMe
 func TestGetBlockRangeReverse(t *testing.T) {
 	testT = t
 	RawRequest = getblockStubReverse
-	os.RemoveAll(unitTestPath)
-	testcache = NewBlockCache(unitTestPath, unitTestChain, 380640, true)
+	testcache = NewBlockCache(testCacheDB(t), unitTestChain, 380640, true)
 	blockChan := make(chan *walletrpc.CompactBlock)
 	errChan := make(chan error)
 
@@ -843,7 +821,6 @@ func TestGetBlockRangeReverse(t *testing.T) {
 		}
 	}
 	step = 0
-	os.RemoveAll(unitTestPath)
 }
 
 func TestGenerateCerts(t *testing.T) {
@@ -900,7 +877,7 @@ func mempoolStub(ctx context.Context, method string, params []json.RawMessage) (
 		if txid != "mempooltxid-1" {
 			testT.Fatal("unexpected txid")
 		}
-		r, _ := json.Marshal(map[string]string{"hex":"aabb"})
+		r, _ := json.Marshal(map[string]string{"hex": "aabb"})
 		return r, nil
 	case 5:
 		// Simulate that still no new block has arrived ...
@@ -932,7 +909,7 @@ func mempoolStub(ctx context.Context, method string, params []json.RawMessage) (
 		if txid != "mempooltxid-2" {
 			testT.Fatal("unexpected txid")
 		}
-		r, _ := json.Marshal(map[string]string{"hex":"ccdd"})
+		r, _ := json.Marshal(map[string]string{"hex": "ccdd"})
 		return r, nil
 	case 8:
 		// A new block arrives, this will cause these two tx to be returned

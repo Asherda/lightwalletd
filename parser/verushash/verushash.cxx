@@ -77,10 +77,10 @@ void Verushash::verushash_v2b1(std::string const bytes, int length, void * ptrRe
     vh2b1.Finalize2b((unsigned char *) ptrResult);
 }
 
-void Verushash::verushash_v2b2(std::string const bytes, void * ptrResult)
+bool Verushash::get_verus_v2_hash(std::string const bytes, void * ptrResult)
 {
     uint256 result;
-
+    bool ok = true;
 
     if (initialized == false) {
         initialize();
@@ -96,7 +96,10 @@ void Verushash::verushash_v2b2(std::string const bytes, void * ptrResult)
     }
     catch(const std::exception& e)
     {
+        result = uint256();
+        ok = false;
     }
 
     memcpy(ptrResult, &result, 32);
+    return ok;
 }

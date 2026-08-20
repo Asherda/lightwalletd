@@ -59,7 +59,7 @@ ExternalProject_Add(
     URL ${LIBSODIUM_SOURCE_URL}
     URL_HASH SHA256=${LIBSODIUM_HASH}
     PREFIX ${CMAKE_BINARY_DIR}/staging/libsodium
-    CONFIGURE_COMMAND cd ${CMAKE_BINARY_DIR}/staging/libsodium/src/libsodium/ && ./autogen.sh
+    CONFIGURE_COMMAND cd ${CMAKE_BINARY_DIR}/staging/libsodium/src/libsodium/ && DO_NOT_UPDATE_CONFIG_SCRIPTS=1 ./autogen.sh
                       && ./configure
                           --enable-static
                           --disable-shared

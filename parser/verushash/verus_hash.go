@@ -31,9 +31,11 @@ func VerusHash_V2B1(serializedHeader []byte) []byte {
 	return hash
 }
 
-func VerusHash_V2B2(serializedHeader []byte) []byte {
+func HashHeader(serializedHeader []byte) []byte {
 	hash := make([]byte, 32)
 	ptrHash := uintptr(unsafe.Pointer(&hash[0]))
-	verusHash.Verushash_v2b2(string(serializedHeader), ptrHash)
+	if !verusHash.Get_verus_v2_hash(string(serializedHeader), ptrHash) {
+		return nil
+	}
 	return hash
 }

@@ -18,6 +18,8 @@ import (
 	"github.com/asherda/lightwalletd/common"
 	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/sirupsen/logrus"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 var (
@@ -29,14 +31,20 @@ var (
 	rawTxData [][]byte
 )
 
-const (
-	unitTestPath  = "unittestcache"
-	unitTestChain = "unittestnet"
-)
+const unitTestChain = "unittestnet"
+
+// testCacheDB returns an in-memory LevelDB database for testing.
+func testCacheDB() *leveldb.DB {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	if err != nil {
+		os.Stderr.WriteString(fmt.Sprint("leveldb.Open failed:", err))
+		os.Exit(1)
+	}
+	return db
+}
 
 func testsetup() (walletrpc.CompactTxStreamerServer, *common.BlockCache) {
-	os.RemoveAll(unitTestPath)
-	cache := common.NewBlockCache(unitTestPath, unitTestChain, 380640, true)
+	cache := common.NewBlockCache(testCacheDB(), unitTestChain, 380640, true)
 	lwd, err := NewLwdStreamer(cache, "main", false /* enablePing */)
 	if err != nil {
 		os.Stderr.WriteString(fmt.Sprint("NewLwdStreamer failed:", err))
@@ -101,7 +109,6 @@ func TestMain(m *testing.M) {
 
 	// cleanup
 	os.Remove("test-log")
-	os.RemoveAll(unitTestPath)
 
 	os.Exit(exitcode)
 }
@@ -197,19 +204,21 @@ func TestGetLatestBlock(t *testing.T) {
 	step = 0
 }
 
-// A valid address starts with "t", followed by 34 alpha characters;
+// Transparent addresses in Verus start with "R" followed by 33 characters;
 // these should all be detected as invalid.
+const goodTaddr = "R123456789012345678901234567890123"
+
 var addressTests = []string{
-	"",                                      // too short
-	"a",                                     // too short
-	"t123456789012345678901234567890123",    // one byte too short
-	"t12345678901234567890123456789012345",  // one byte too long
-	"t123456789012345678901234567890123*",   // invalid "*"
-	"s1234567890123456789012345678901234",   // doesn't start with "t"
-	" t1234567890123456789012345678901234",  // extra stuff before
-	"t1234567890123456789012345678901234 ",  // extra stuff after
-	"\nt1234567890123456789012345678901234", // newline before
-	"t1234567890123456789012345678901234\n", // newline after
+	"",                                 // too short
+	"a",                                // too short
+	goodTaddr[:len(goodTaddr)-1],       // one byte too short
+	goodTaddr + "1",                    // one byte too long
+	goodTaddr[:len(goodTaddr)-1] + "*", // invalid "*"
+	"s" + goodTaddr[1:],                // doesn't start with "R"
+	" " + goodTaddr,                    // extra stuff before
+	goodTaddr + " ",                    // extra stuff after
+	"\n" + goodTaddr,                   // newline before
+	goodTaddr + "\n",                   // newline after
 }
 
 func zcashdrpcStub(ctx context.Context, method string, params []json.RawMessage) (json.RawMessage, error) {
@@ -224,7 +233,7 @@ func zcashdrpcStub(ctx context.Context, method string, params []json.RawMessage)
 		if len(filter.Addresses) != 1 {
 			testT.Fatal("wrong number of addresses")
 		}
-		if filter.Addresses[0] != "t1234567890123456789012345678901234" {
+		if filter.Addresses[0] != goodTaddr {
 			testT.Fatal("wrong address")
 		}
 		if filter.Start != 20 {
@@ -294,7 +303,7 @@ func TestGetTaddressTxids(t *testing.T) {
 	}
 
 	// valid address
-	addressBlockFilter.Address = "t1234567890123456789012345678901234"
+	addressBlockFilter.Address = goodTaddr
 	err := lwd.GetTaddressTxids(addressBlockFilter, &testgettx{})
 	if err != nil {
 		t.Fatal("GetTaddressTxids failed", err)

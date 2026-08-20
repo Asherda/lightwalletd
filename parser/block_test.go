@@ -19,21 +19,24 @@ import (
 )
 
 func TestBlockParser(t *testing.T) {
-	// These (valid on testnet) correspond to the transactions in testdata/blocks;
-	// for each block, the hashes for the tx within that block.
 	var txhashes = [][]string{
 		{
-			"81096ff101a4f01d25ffd34a446bee4368bd46c233a59ac0faf101e1861c6b22",
+			"d3badb19e0a067d800c2d6fec1024e57e04fb5c9e5b65fd1e84f42405c784167",
+			"858437d350bf2e943fb3cc3a678c858769c8cba6ff538f86ccfc944e497a4672",
 		}, {
-			"921dc41bef3a0d887c615abac60a29979efc8b4bbd3d887caeb6bb93501bde8e",
+			"ed047dd498f48a1ee15362861824961741d9c4e847f66c84effacb09249f5d6d",
+			"2259a6d5c446910d674791b20facd246f98f7757160f98fd8d90df5d182a9455",
 		}, {
-			"d8e4c336ffa69dacaa4e0b4eaf8e3ae46897f1930a573c10b53837a03318c980",
-			"4d5ccbfc6984680c481ff5ce145b8a93d59dfea90c150dfa45c938ab076ee5b2",
+			"1d142b63352c8fbd6df57f06b5e21df5857955d571ca911ada9ecc9e16f7bb6f",
+			"513a7915b5a065253f3900fd0dab23e4670fb96e7f3d25ba45cbc82ec8e11434",
+			"441eb6a6e78fe8a6ba3132af8e7662f7970d07ef8511fd4c61be6421429cf68c",
 		}, {
-			"df2b03619d441ce3d347e9278d87618e975079d0e235dfb3b3d8271510f707aa",
-			"8d2593edfc328fa637b4ac91c7d569ee922bb9a6fda7cea230e92deb3ae4b634",
+			"7c61ac160b0fd9a7c6c4fffd2c261c9fd9a34468a4b3d943068be98247aa730f",
+			"8f7233fba30716e0207a47c5ed00279d5b2004e4e3f0803679ff8c2b0f206f07",
+			"7b00e0751480f71d65e28b1e092c2367d0fea9056163ad8e580ef08f5c8d04b0",
 		},
 	}
+	var hasSapling = []bool{false, false, true, true}
 	testBlocks, err := os.Open("../testdata/blocks")
 	if err != nil {
 		t.Fatal(err)
@@ -77,11 +80,11 @@ func TestBlockParser(t *testing.T) {
 			}
 
 			// Some basic sanity checks
-			if block.hdr.Version != 4 {
+			if block.hdr.Version != posNonceVerusV2 {
 				t.Error("Read wrong version in a test block.")
 				break
 			}
-			if block.GetVersion() != 4 {
+			if block.GetVersion() != posNonceVerusV2 {
 				t.Error("Read wrong version in a test block.")
 				break
 			}
@@ -96,19 +99,25 @@ func TestBlockParser(t *testing.T) {
 			if block.GetTxCount() != len(txhashes[blockindex])*(i+1) {
 				t.Error("Unexpected number of transactions")
 			}
-			if block.HasSaplingTransactions() {
-				t.Error("Unexpected Sapling tx")
+			if block.HasSaplingTransactions() != hasSapling[blockindex] {
+				t.Errorf("block %d: HasSaplingTransactions is %v, want %v",
+					blockindex, block.HasSaplingTransactions(), hasSapling[blockindex])
 				break
 			}
+			anySapling := false
 			for txindex, tx := range block.Transactions() {
 				if tx.HasSaplingElements() {
-					t.Error("Unexpected Sapling tx")
-					break
+					anySapling = true
 				}
 				expectedHash := txhashes[blockindex][txindex%len(txhashes[blockindex])]
 				if hex.EncodeToString(tx.GetDisplayHash()) != expectedHash {
 					t.Error("incorrect tx hash")
 				}
+			}
+			if anySapling != block.HasSaplingTransactions() {
+				t.Errorf("block %d: HasSaplingTransactions is %v but per-tx scan found %v",
+					blockindex, block.HasSaplingTransactions(), anySapling)
+				break
 			}
 			// Keep appending the original transactions, which is unrealistic
 			// because the coinbase is being replicated, but it works; first do
@@ -198,6 +207,15 @@ func TestGenesisBlockParser(t *testing.T) {
 		}
 		if len(blockData) > 0 {
 			t.Error("Extra data remaining")
+		}
+
+		// Genesis block has version 1 and no BIP34 height.
+		if i == 0 {
+			if block.hdr.Version != 1 {
+				t.Errorf("Read wrong version in genesis block: %d", block.hdr.Version)
+				break
+			}
+			continue
 		}
 
 		// Some basic sanity checks

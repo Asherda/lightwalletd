@@ -18,6 +18,6 @@ public:
   void verushash_v2(const char * bytes, int length, void * ptrResult);
   void verushash_v2b(const char * bytes, int length, void * ptrResult);
   void verushash_v2b1(std::string bytes, int length, void * ptrResult);
-  void verushash_v2b2(std::string const  bytes, void * ptrResult);
+  bool get_verus_v2_hash(std::string const  bytes, void * ptrResult);
 };
 #endif

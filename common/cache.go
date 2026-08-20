@@ -244,11 +244,11 @@ func (c *BlockCache) Add(height int, block *walletrpc.CompactBlock) error {
 	}
 
 	if height > c.firstBlock {
-    		prevSize := c.getSaplingTreeSize(height - 1)
-   		if newSize < prevSize {
-                        // should always increase or stay the same on inter-block basis
-        		Log.Fatal("sapling tree size decreased at height ", height)
-    		}
+		prevSize := c.getSaplingTreeSize(height - 1)
+		if newSize < prevSize {
+			// should always increase or stay the same on inter-block basis
+			Log.Fatal("sapling tree size decreased at height ", height)
+		}
 	}
 
 	if err := c.storeSaplingTreeSize(height, newSize); err != nil {
@@ -267,10 +267,6 @@ func (c *BlockCache) Add(height int, block *walletrpc.CompactBlock) error {
 		Log.Fatal("hash write failed at height", height, ": ", err)
 	}
 
-	if err := c.storeNewHeight(false); err != nil {
-		Log.Fatal("height write failed at height", height, ": ", err)
-	}
-
 	if c.latestHash == nil {
 		c.latestHash = make([]byte, len(block.Hash))
 	}
@@ -278,6 +274,10 @@ func (c *BlockCache) Add(height int, block *walletrpc.CompactBlock) error {
 
 	c.nextBlock++
 	// Invariant: m[firstBlock..nextBlock) are valid.
+
+	if err := c.storeNewHeight(false); err != nil {
+		Log.Fatal("height write failed at height", height, ": ", err)
+	}
 	return nil
 }
 
@@ -300,6 +300,7 @@ func (c *BlockCache) Reorg(height int) {
 
 	// adjust to the new height
 	c.nextBlock = height
+	c.storeNewHeight(true)
 	c.setLatestHash()
 }
 

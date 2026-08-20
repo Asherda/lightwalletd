@@ -24,6 +24,10 @@ swig_add_library(${SWIG_MODULE_NAME}
     SOURCES verushash.i
 )
 
+add_custom_command(TARGET ${SWIG_MODULE_NAME} POST_BUILD
+    COMMAND sh -c "grep -l '^// source: /' '${VERUSHASH_OUTPUT_DIR}/verushash.go' '${VERUSHASH_OUTPUT_DIR}/verushashGO_wrap.cxx' 2>/dev/null | xargs -r sed -i 's|^// source: .*/verushash\\.i$|// source: verushash.i|'"
+    VERBATIM)
+
 # Include the necessary directories
 target_include_directories(${SWIG_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(${SWIG_MODULE_NAME} PRIVATE ${CMAKE_BINARY_DIR}/include)
