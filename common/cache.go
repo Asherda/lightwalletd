@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	blockHeightPrefix = "B" // key is "B" + block height, value is block; see also H, block by hash
-	blockHashPrefix   = "H" // key is "H" + block hash, value is block; see also B, block by height
+	blockHeightPrefix = "B" // key is "B" + block height, value is block
 	idPrefix          = "I" // key is "I" + chain ID, value is height (more to come), see next (verusID)
 	saplingTreePrefix = "S" // key is "S", value is sapling tree size by height
 )
@@ -248,7 +247,7 @@ func (c *BlockCache) Add(height int, block *walletrpc.CompactBlock) error {
 	checkSummed := checksum(height, data)
 	checkSummed = append(checkSummed, data...)
 
-	if err := c.storeNewBlock(height, block.Hash, checkSummed); err != nil {
+	if err := c.storeNewBlock(height, checkSummed); err != nil {
 		Log.Fatal("hash write failed at height", height, ": ", err)
 	}
 
@@ -350,14 +349,6 @@ func (c *BlockCache) flushBlock(height int) {
 		Log.Warning("error flushing block (by height) at height ", height, ": ", err)
 	}
 
-	if c.latestHash != nil {
-		hashID := append([]byte(blockHashPrefix), c.latestHash...)
-		err = c.ldb.Delete(hashID, &opt.WriteOptions{Sync: false})
-		if err != nil {
-			Log.Warning("error flushing block (by hash) at height ", height, ": ", err)
-		}
-	}
-
 	treeKey := []byte(saplingTreePrefix + strconv.Itoa(height))
 	err = c.ldb.Delete(treeKey, &opt.WriteOptions{Sync: false})
 	if err != nil {
@@ -371,17 +362,10 @@ func (c *BlockCache) storeNewHeight(sync bool) error {
 	return c.ldb.Put([]byte(idPrefix+c.verusID), bytesHeight, &opt.WriteOptions{Sync: sync})
 }
 
-func (c *BlockCache) storeNewBlock(height int, hash []byte, block []byte) error {
+func (c *BlockCache) storeNewBlock(height int, block []byte) error {
 	err := c.ldb.Put([]byte(blockHeightPrefix+strconv.Itoa(height)), block, &opt.WriteOptions{Sync: false})
 	if err != nil {
 		Log.Fatal("blocks write at height", height, "failed: ", err)
-		return err
-	}
-	// Index the same block by its hash: key is blockHashPrefix ("H") + block hash.
-	hashID := append([]byte(blockHashPrefix), hash...)
-	err = c.ldb.Put(hashID, block, &opt.WriteOptions{Sync: false})
-	if err != nil {
-		Log.Fatal("hash write at height", height, "failed: ", err)
 		return err
 	}
 	return nil
