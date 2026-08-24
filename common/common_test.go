@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asherda/lightwalletd/parser"
-	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/veruscoin/lightwalletd/parser"
+	"github.com/veruscoin/lightwalletd/walletrpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/asherda/lightwalletd/common"
 	"github.com/spf13/cobra"
+	"github.com/veruscoin/lightwalletd/common"
 )
 
 // versionCmd represents the version command

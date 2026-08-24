@@ -7,9 +7,9 @@ package frontend
 import (
 	"net"
 
-	"github.com/asherda/lightwalletd/common"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/pkg/errors"
+	"github.com/veruscoin/lightwalletd/common"
 	ini "gopkg.in/ini.v1"
 )
 

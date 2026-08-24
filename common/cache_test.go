@@ -9,10 +9,10 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/asherda/lightwalletd/parser"
-	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/veruscoin/lightwalletd/parser"
+	"github.com/veruscoin/lightwalletd/walletrpc"
 )
 
 var compacts []*walletrpc.CompactBlock

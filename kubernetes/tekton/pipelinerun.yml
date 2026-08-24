@@ -20,6 +20,6 @@ spec:
     - name: gitTag
       value: GetMempoolTx
     - name: gitRepositoryURL
-      value: https://github.com/asherda/lightwalletd.git
+      value: https://github.com/veruscoin/lightwalletd.git
     - name: dockerHubRepo
       value: electriccoinco/lightwalletd

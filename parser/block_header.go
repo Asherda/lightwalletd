@@ -10,8 +10,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/asherda/lightwalletd/parser/internal/bytestring"
-	"github.com/asherda/lightwalletd/parser/verushash"
+	"github.com/veruscoin/lightwalletd/parser/internal/bytestring"
+	"github.com/veruscoin/lightwalletd/parser/verushash"
 
 	"github.com/pkg/errors"
 	"math/big"

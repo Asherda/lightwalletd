@@ -16,11 +16,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asherda/lightwalletd/common"
-	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/veruscoin/lightwalletd/common"
+	"github.com/veruscoin/lightwalletd/walletrpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

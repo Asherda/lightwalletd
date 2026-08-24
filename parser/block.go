@@ -8,9 +8,9 @@ package parser
 import (
 	"fmt"
 
-	"github.com/asherda/lightwalletd/parser/internal/bytestring"
-	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/pkg/errors"
+	"github.com/veruscoin/lightwalletd/parser/internal/bytestring"
+	"github.com/veruscoin/lightwalletd/walletrpc"
 )
 
 // Block represents a full block (not a compact block).
@@ -78,7 +78,7 @@ func (b *Block) SaplingOutputCount() int {
 	return total
 }
 
-// see https://github.com/asherda/lightwalletd/issues/17#issuecomment-467110828
+// see https://github.com/zcash/lightwalletd/issues/17#issuecomment-467110828
 const genesisTargetDifficulty = 520617983
 
 // GetHeight extracts the block height from the coinbase transaction. See
@@ -138,7 +138,7 @@ func (b *Block) ToCompact() *walletrpc.CompactBlock {
 // ToCompactWithTreeSize returns the compact representation of the full block,
 // including a cumulative Sapling commitment tree size.
 func (b *Block) ToCompactWithTreeSize(treeSize uint64) *walletrpc.CompactBlock {
-        size := treeSize
+	size := treeSize
 	compactBlock := &walletrpc.CompactBlock{
 		//TODO ProtoVersion: 1,
 		Height:   uint64(b.GetHeight()),

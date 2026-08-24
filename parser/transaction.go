@@ -8,9 +8,9 @@ package parser
 import (
 	"crypto/sha256"
 
-	"github.com/asherda/lightwalletd/parser/internal/bytestring"
-	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/pkg/errors"
+	"github.com/veruscoin/lightwalletd/parser/internal/bytestring"
+	"github.com/veruscoin/lightwalletd/walletrpc"
 )
 
 type rawTransaction struct {

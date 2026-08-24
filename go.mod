@@ -1,4 +1,4 @@
-module github.com/asherda/lightwalletd
+module github.com/veruscoin/lightwalletd
 
 go 1.22.2
 

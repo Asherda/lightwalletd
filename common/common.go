@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asherda/lightwalletd/parser"
-	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/veruscoin/lightwalletd/parser"
+	"github.com/veruscoin/lightwalletd/walletrpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -473,11 +473,11 @@ func GetBlockRange(ctx context.Context, cache *BlockCache, blockOut chan<- *wall
 // the meanings of the `Height` field of the `RawTransaction` type are as
 // follows:
 //
-// * height 0: the transaction is in the mempool
-// * height 0xffffffffffffffff: the transaction has been mined on a fork that
-//   is not currently the main chain
-// * any other height: the transaction has been mined in the main chain at the
-//   given height
+//   - height 0: the transaction is in the mempool
+//   - height 0xffffffffffffffff: the transaction has been mined on a fork that
+//     is not currently the main chain
+//   - any other height: the transaction has been mined in the main chain at the
+//     given height
 func ParseRawTransaction(message json.RawMessage) (*walletrpc.RawTransaction, error) {
 	// Many other fields are returned, but we need only these two.
 	var txinfo ZcashdRpcReplyGetrawtransaction

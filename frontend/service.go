@@ -17,9 +17,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/asherda/lightwalletd/common"
-	"github.com/asherda/lightwalletd/parser"
-	"github.com/asherda/lightwalletd/walletrpc"
+	"github.com/veruscoin/lightwalletd/common"
+	"github.com/veruscoin/lightwalletd/parser"
+	"github.com/veruscoin/lightwalletd/walletrpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

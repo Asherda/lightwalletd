@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asherda/lightwalletd/parser/verushash"
+	"github.com/veruscoin/lightwalletd/parser/verushash"
 )
 
 type solutionVersionTest struct {

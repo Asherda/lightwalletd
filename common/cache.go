@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/asherda/lightwalletd/walletrpc"
 	"github.com/golang/protobuf/proto"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/veruscoin/lightwalletd/walletrpc"
 )
 
 const (

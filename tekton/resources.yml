@@ -19,4 +19,4 @@ spec:
     - name: revision
       value: master
     - name: url
-      value: https://github.com/asherda/lightwalletd.git
+      value: https://github.com/veruscoin/lightwalletd.git

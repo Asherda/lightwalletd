@@ -23,10 +23,10 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/asherda/lightwalletd/common"
-	"github.com/asherda/lightwalletd/common/logging"
-	"github.com/asherda/lightwalletd/frontend"
-	"github.com/asherda/lightwalletd/walletrpc"
+	"github.com/veruscoin/lightwalletd/common"
+	"github.com/veruscoin/lightwalletd/common/logging"
+	"github.com/veruscoin/lightwalletd/frontend"
+	"github.com/veruscoin/lightwalletd/walletrpc"
 )
 
 var cfgFile string
